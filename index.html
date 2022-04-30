@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.7.5/proj4-src.js" integrity="sha512-v9fKB/Tdskpid8kkFcCde7j8nyykKK9fBAZIU8pzTuMIOMJYccsutTxn8qUS/p/32FG/ynVrsbj+dsaya/jNEg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <title>Document</title>
+</head>
+<body>
+    <canvas id="map" width="1024" height="768"></canvas>
+    <table>
+        <tr><th colspan="2">Cycling time estimation</th></tr>
+        <tr style="display: none;"><td>Power (W)</td><td><input id="input_power" value="200" /></td></tr>
+        <tr style="display: none;"><td>Time</td><td id="output_estimated_cycling_time"></td></tr>
+        <tbody id="estimated_cycling_times"></tbody>
+        <tr><th colspan="2">Settings</th></tr>
+        <tr><td>Total weight (kg):</td><td><input id="input_total_weight" value="100" /></td></tr>
+        <tr><td>Coefficient of rolling resistance:</td><td><input id="input_rolling_resistance" value="0.0055" /></td></tr>
+        <tr><td>Speed of headwind (km/h):</td><td><input id="input_wind_speed" value="5" /></td></tr>
+        <tr><td>Air density (kg/m3):</td><td><input id="input_air_density" value="1.22601" /></td></tr>
+        <tr><td>Drag coefficient (kg):</td><td><input id="input_drag_coefficient" value="0.321" /></td></tr>
+        <tr><td>Loss:</td><td><input id="input_loss" value="0.05" /></td></tr>
+    </table>
+</body>
+<script>
+class BikeMath
+{
+    static Maps = {};
+    static G = 9.80665;
+
+    static ROLLING_RESISTANCES = 
+    {
+        Concrete: { Slick: 0.0020, Knobby: 0.0025 },
+        Asphalt: { Slick: 0.0050, Knobby: 0.0063 },
+        Gravel: { Slick: 0.0060, Knobby: 0.0076 },
+        Grass: { Slick: 0.0070, Knobby: 0.0089 },
+        OffRoad: { Slick: 0.0200, Knobby: 0.0253 },
+        Sand: { Slick: 0.0300, Knobby: 0.0380 }
+    }
+
+    static DRAG_COEFFICIENT =
+    {
+        Tops: 0.408,
+        Hoods: 0.324,
+        Drops: 0.307,
+        Aerobars: 0.2914
+    }
+
+    static time(distance, elevation, power, { air_density, rolling_resistance, drag_coefficient, mass, loss, wind_speed })
+    {
+        let slope = elevation / distance;
+        let key = slope.toFixed(1);
+
+        if (!BikeMath.Maps[key])
+        {
+            BikeMath.Maps[key] = BikeMath.createPowerToSpeedMap(slope, mass, rolling_resistance, drag_coefficient, air_density, wind_speed, loss)
+        }
+
+        let speed = BikeMath.Maps[key][Math.round(power)];
+        return distance / speed;
+    }
+
+    static createPowerToSpeedMap(slope, mass, rolling_resistance, drag_coefficient, air_density, wind_speed, loss)
+    {
+        let map = {};
+
+        for (let speed = 0; speed < 28; speed += 0.001)
+        {
+            let power = BikeMath.power(slope, mass, rolling_resistance, drag_coefficient, air_density, speed, wind_speed, loss);
+            map[Math.round(power)] = speed;
+        }
+
+        return map;
+    }
+
+    static power(slope, mass, rolling_resistance, drag_coefficient, air_density, speed, wind_speed, loss)
+    {
+        return (BikeMath.fg(slope, mass) + BikeMath.fr(slope, mass, rolling_resistance) + BikeMath.fa(drag_coefficient, air_density, speed, wind_speed)) * speed / (1 - loss)
+    }
+
+    static fg(slope, mass)
+    {
+        return BikeMath.G * Math.sin(Math.atan(slope)) * mass;
+    }
+
+    static fr(slope, mass, rolling_resistance)
+    {
+        return BikeMath.G * Math.cos(Math.atan(slope)) * mass * rolling_resistance;
+    }
+
+    static fa(drag_coefficient, air_density, speed, wind_speed)
+    {
+        return 0.5 * drag_coefficient * air_density * Math.pow(speed + wind_speed, 2);
+    }
+}
+
+class Gpx
+{
+    static PI180 = Math.PI / 180;
+
+    static greatCircleDistance(alon, alat, blon, blat) 
+    {
+        let dlat = Math.sin((blat - alat) / 2);
+        let dlon = Math.sin((blon - alon) / 2);
+        let r = Math.sqrt(dlat * dlat + Math.cos(alat) * Math.cos(blat) * dlon * dlon);
+        return 2.0 * Math.asin(r);
+    }
+
+    static distance(a, b)
+    {
+        return 6378137 * Gpx.greatCircleDistance(a.lon * Gpx.PI180, a.lat * Gpx.PI180, b.lon * Gpx.PI180, b.lat * Gpx.PI180);
+    }
+}
+
+class Track
+{
+    static async load()
+    {
+        return new Track(await (await fetch('track.gpx')).text());
+    }
+
+    constructor(gpx_content)
+    {
+        function parseTrkpt(p)
+        {
+            let lat = parseFloat(p.getAttribute('lat'));
+            let lon = parseFloat(p.getAttribute('lon'));
+            let ele = parseFloat(p.getElementsByTagName('ele')[0].textContent);
+            return { lat, lon, ele };
+        }
+
+        let gpx = new DOMParser().parseFromString(gpx_content, "text/xml");
+        this.points = [...gpx.getElementsByTagName("trkpt")].map(parseTrkpt);
+        this.lon_min = Math.min.apply(Math, this.points.map(p => p.lon));
+        this.lon_max = Math.max.apply(Math, this.points.map(p => p.lon));
+        this.lat_min = Math.min.apply(Math, this.points.map(p => p.lat));
+        this.lat_max = Math.max.apply(Math, this.points.map(p => p.lat));
+        this.total_distance = 0;
+        this.points[0].total_distance = 0;
+        
+        for (let i = 1; i < this.points.length; i++)
+        {
+            let p1 = this.points[i - 1];
+            let p2 = this.points[i];
+            p2.distance = Gpx.distance(p1, p2);
+            this.total_distance += p2.distance;
+            p2.total_distance = this.total_distance;
+        }
+    }
+
+    getPoints(resolution)
+    {
+        let points = [];
+
+        for (let i = 0; i < this.points.length; i++)
+        {
+            if (i % resolution == 0)
+            {
+                points.push(this.points[i]);
+            }
+        }
+        
+        return points;
+    }
+
+    calculateTime(power, settings)
+    {
+        let points = this.getPoints(40);
+        let total_time = 0;
+
+        for (let i = 1; i < points.length; i++)
+        {
+            let p1 = points[i - 1];
+            let p2 = points[i];
+            let distance = p2.total_distance - p1.total_distance;
+            let elevation = p2.ele - p1.ele;
+            total_time += BikeMath.time(distance, elevation, power, settings);
+        }
+
+        return total_time;
+    }
+}
+
+class Map
+{
+    constructor(track)
+    {
+        this.track = track;
+        this.resolution = 40;
+        this.context = document.getElementById('map').getContext('2d');
+        this._lon_scale = this.context.canvas.width / (this.track.lon_max - this.track.lon_min);
+        this._lat_scale = this.context.canvas.height / (this.track.lat_max - this.track.lat_min);
+    }
+
+    draw()
+    {
+        let points = this.track.getPoints(this.resolution);
+        let prev_ele = points[0].ele;
+
+        for (let i = 0; i < points.length; i++)
+        {
+            let p = points[i];
+            p.ele_diff = p.ele - prev_ele;
+            prev_ele = p.ele;
+        }
+
+        let ele_diff_min = Math.min.apply(Math, points.map(p => p.ele_diff));
+        let ele_diff_max = Math.max.apply(Math, points.map(p => p.ele_diff));
+
+        for (let i = 1; i < points.length; i++)
+        {
+            let t1 = points[i - 1];
+            let t2 = points[i];
+            let d = Gpx.distance(t1, t2);
+            let p1 = this._translate(points[i - 1]);
+            let p2 = this._translate(points[i]);
+
+            if (t2.ele_diff > 0)
+            {
+                let red = Math.round((255 / ele_diff_max) * t2.ele_diff);
+                this.context.strokeStyle = `rgb(${red}, 0, 0)`;
+                this.context.lineWidth = 1 + Math.round((4 / ele_diff_max) * t2.ele_diff);
+            }
+            else
+            {
+                let green = Math.round((255 / ele_diff_min) * t2.ele_diff);
+                this.context.strokeStyle = `rgb(0, ${green}, 0)`;
+                this.context.lineWidth = 1 + Math.round((4 / ele_diff_min) * t2.ele_diff);
+            }
+
+            //context.lineWidth = 3;
+            this.context.beginPath();
+
+            if (i > 2000 / this.resolution)
+            {
+                this.context.moveTo(p1.x, p1.y + 50);
+                this.context.lineTo(p2.x, p2.y + 50);
+            }
+            else
+            {
+                this.context.moveTo(p1.x, p1.y);
+                this.context.lineTo(p2.x, p2.y);
+            }
+
+            this.context.stroke();
+            
+            /*
+            let ele_x = (canvas.width / distance_total) * t2.distance_total;
+            let ele_y = ele_y_prev - t2.ele_diff;
+            context.lineWidth = 3;
+            context.moveTo(ele_x_prev, ele_y_prev);
+            context.lineTo(ele_x, ele_y);
+            context.stroke();
+            ele_x_prev = ele_x;
+            ele_y_prev = ele_y;
+            */
+        }
+    }
+            
+    _translate(p)
+    {
+        let x = (p.lon - this.track.lon_min) * this._lon_scale;
+        let y = this.context.canvas.height - (p.lat - this.track.lat_min) * this._lat_scale;
+        return { x, y };
+    }
+}
+
+function getSettings()
+{
+    let kmph_to_mps = v => (v * 1000) / (60 * 60);
+    let mps_to_kmph = v => (v * 60 * 60) / 1000;
+    // return {
+    //     air_density: 1.22601,
+    //     rolling_resistance: 0.005,
+    //     drag_coefficient: 0.321,
+    //     mass: 90 + 10,
+    //     loss: 0,
+    //     wind_speed: 0
+    // };
+    return {
+        air_density: parseFloat(document.getElementById('input_air_density').value),
+        rolling_resistance: parseFloat(document.getElementById('input_rolling_resistance').value),
+        drag_coefficient: parseFloat(document.getElementById('input_drag_coefficient').value),
+        mass: parseFloat(document.getElementById('input_total_weight').value),
+        loss: parseFloat(document.getElementById('input_loss').value),
+        wind_speed: kmph_to_mps(parseFloat(document.getElementById('input_wind_speed').value))
+    };
+}
+
+async function main()
+{
+    let map = new Map(await Track.load());
+    map.draw();
+    
+    function onPowerChanged(e)
+    {
+        let format_time = time => {
+            let minutes = Math.round(time / 60);
+            return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+        };
+        let power = parseFloat(e.target.value);
+        let settings = getSettings();
+        document.getElementById('output_estimated_cycling_time').innerText = format_time(map.track.calculateTime(power, settings));
+        let tbody = document.getElementById('estimated_cycling_times');
+        tbody.innerHTML = '';
+
+        for (let i = 100; i <= 300; i += 10) 
+        {
+            let tr = document.createElement('tr');
+            let td_power = document.createElement('td');
+            let td_time = document.createElement('td');
+            td_power.innerText = `${i}`;
+            td_time.innerText = format_time(map.track.calculateTime(i, settings));
+            tr.appendChild(td_power);
+            tr.appendChild(td_time);
+            tbody.appendChild(tr);
+        }
+    }
+
+    function onDataChanged(e)
+    {
+        BikeMath.Maps = {};
+        onPowerChanged(e);
+    }
+    
+    let input_power = document.getElementById('input_power');
+    input_power.addEventListener("change", onPowerChanged);
+    input_power.value = 180;
+    input_power.dispatchEvent(new Event('change'));
+    
+    document.getElementById('input_air_density').addEventListener("change", onDataChanged);
+    document.getElementById('input_rolling_resistance').addEventListener("change", onDataChanged);
+    document.getElementById('input_drag_coefficient').addEventListener("change", onDataChanged);
+    document.getElementById('input_total_weight').addEventListener("change", onDataChanged);
+    document.getElementById('input_loss').addEventListener("change", onDataChanged);
+    document.getElementById('input_wind_speed').addEventListener("change", onDataChanged);
+}
+
+main();
+
+/*
+let kmph_to_mps = v => (v * 1000) / (60 * 60);
+let mps_to_kmph = v => (v * 60 * 60) / 1000;
+let air_density = elevation => 1.22601; //1.225 * Math.exp(-0.00011856 * elevation);
+let rolling_resistance = 0.005; //BikeMath.ROLLING_RESISTANCES.Asphalt.Slick;
+let drag_coefficient = 0.321; //BikeMath.DRAG_COEFFICIENT.Hoods
+let mass = 90 + 10;
+let slope = 0;
+let loss = 0;
+
+let speed = kmph_to_mps(30);
+let wind_speed = kmph_to_mps(0);
+
+//alert(mps_to_kmph(BikeMath.speed(0, mass, rolling_resistance, drag_coefficient, air_density(500), 200, wind_speed, loss)));
+//alert(BikeMath.power(0, mass, rolling_resistance, drag_coefficient, air_density(500), speed, wind_speed, loss));
+
+async function onLoad()
+{
+    let resolution = 40;
+    let canvas = document.getElementById('map');
+    let gpx_content = await (await fetch('track.gpx')).text();
+    let gpx = new DOMParser().parseFromString(gpx_content, "text/xml");
+    let points = [...gpx.getElementsByTagName("trkpt")].map(parseTrkpt);
+    let distance_total = 0;
+
+    for (let i = 1; i < points.length; i++)
+    {
+        let p1 = points[i - 1];
+        let p2 = points[i];
+        p2.distance = distance(p1, p2);
+        distance_total += p2.distance;
+        p2.distance_total = distance_total;
+    }
+
+
+    let lon_min = Math.min.apply(Math, points.map(p => p.lon));
+    let lon_max = Math.max.apply(Math, points.map(p => p.lon));
+    let lat_min = Math.min.apply(Math, points.map(p => p.lat));
+    let lat_max = Math.max.apply(Math, points.map(p => p.lat));
+    let lon_scale = canvas.width / (lon_max - lon_min);
+    let lat_scale = canvas.height / (lat_max - lat_min);
+
+
+    let prev_ele = points[0].ele;
+
+    for (let i = 0; i < points.length; i++)
+    {
+        let p = points[i];
+        p.ele_diff = p.ele - prev_ele;
+        prev_ele = p.ele;
+    }
+
+    let ele_diff_min = Math.min.apply(Math, points.map(p => p.ele_diff));
+    let ele_diff_max = Math.max.apply(Math, points.map(p => p.ele_diff));
+    /
+    let ele_x_prev = 0;
+    let ele_y_prev = canvas.height - 50;
+    /
+    let context = canvas.getContext('2d');
+    
+    for (let i = 1; i < points.length; i++)
+    {
+        let t1 = points[i - 1];
+        let t2 = points[i];
+        let d = distance(t1, t2);
+        let p1 = translate(points[i - 1]);
+        let p2 = translate(points[i]);
+
+        if (t2.ele_diff > 0)
+        {
+            let red = Math.round((255 / ele_diff_max) * t2.ele_diff);
+            context.strokeStyle = `rgb(${red}, 0, 0)`;
+            context.lineWidth = 5 + Math.round((3 / ele_diff_max) * t2.ele_diff);
+        }
+        else
+        {
+            let green = Math.round((255 / ele_diff_min) * t2.ele_diff);
+            context.strokeStyle = `rgb(0, ${green}, 0)`;
+            context.lineWidth = 5 + Math.round((3 / ele_diff_min) * t2.ele_diff);
+        }
+
+        //context.lineWidth = 3;
+        context.beginPath();
+
+        if (i > 2000 / resolution)
+        {
+            context.moveTo(p1.x, p1.y + 50);
+            context.lineTo(p2.x, p2.y + 50);
+        }
+        else
+        {
+            context.moveTo(p1.x, p1.y);
+            context.lineTo(p2.x, p2.y);
+        }
+
+        context.stroke();
+        
+        /
+        let ele_x = (canvas.width / distance_total) * t2.distance_total;
+        let ele_y = ele_y_prev - t2.ele_diff;
+        context.lineWidth = 3;
+        context.moveTo(ele_x_prev, ele_y_prev);
+        context.lineTo(ele_x, ele_y);
+        context.stroke();
+        ele_x_prev = ele_x;
+        ele_y_prev = ele_y;
+        /
+    }
+}
+*/
+</script>
+</html>
