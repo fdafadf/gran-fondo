@@ -310,7 +310,7 @@ async function main()
             let tr = document.createElement('tr');
             let td_power = document.createElement('td');
             let td_time = document.createElement('td');
-            td_power.innerText = `${i}`;
+            td_power.innerText = `${i} W`;
             td_time.innerText = format_time(map.track.calculateTime(i, settings));
             tr.appendChild(td_power);
             tr.appendChild(td_time);
