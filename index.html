@@ -5,11 +5,45 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.7.5/proj4-src.js" integrity="sha512-v9fKB/Tdskpid8kkFcCde7j8nyykKK9fBAZIU8pzTuMIOMJYccsutTxn8qUS/p/32FG/ynVrsbj+dsaya/jNEg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script type="module" src="main.js"></script>
     <title>Document</title>
 </head>
 <body>
-    <canvas id="map" width="1024" height="768"></canvas>
-    <table>
+    <div style="display: none;">
+        <input type="number" id="profile_resolution_input" min="1" max="40" value="1">
+    </div>
+    <div style="display: flex; flex-direction: column; height: 100vh;">
+        <div class="panel">
+            <div id="profile_container" style="display: flex; overflow-x: scroll; background-color: #fffff5;"></div>
+        </div>
+        <div style="flex-grow: 1; display: flex; flex-direction: row; overflow: hidden;">
+            <div>
+                <table class="panel" style="min-width: 25em; background-color: #fffff5;">
+                    <tr>
+                        <th colspan="2">Segment under the cursor</th>
+                    </tr>
+                    <tr>
+                        <td>Distance from start:</td>
+                        <td id="profile_coursor_distance"></td>
+                    </tr>
+                    <tr>
+                        <td>Gradient:</td>
+                        <td id="profile_coursor_gradient"></td>
+                    </tr>
+                    <tr>
+                        <td>Segment length: </td>
+                        <td id="profile_coursor_length"></td>
+                    </tr>
+                    <tr>
+                        <td>Estimated speed: </td>
+                        <td id="profile_coursor_estimated_speed"></td>
+                    </tr>
+                </table>
+            </div>
+            <div id="map_container" class="panel" style="overflow: hidden; flex-grow: 1; background-color: #fffff5;"></div>
+        </div>
+    </div>
+    <!-- <table>
         <tr><th colspan="2">Cycling time estimation</th></tr>
         <tr style="display: none;"><td>Power (W)</td><td><input id="input_power" value="200" /></td></tr>
         <tr style="display: none;"><td>Time</td><td id="output_estimated_cycling_time"></td></tr>
@@ -21,9 +55,20 @@
         <tr><td>Air density (kg/m3):</td><td><input id="input_air_density" value="1.22601" /></td></tr>
         <tr><td>Drag coefficient (kg):</td><td><input id="input_drag_coefficient" value="0.321" /></td></tr>
         <tr><td>Loss:</td><td><input id="input_loss" value="0.05" /></td></tr>
-    </table>
+    </table> -->
 </body>
-<script>
+<style>
+body {
+    margin: 0;
+    padding: 0;
+}
+.panel {
+    box-shadow: 0 0 5px #777;
+    margin: 1em;
+}
+</style>
+<!--
+<script1>
 class BikeMath
 {
     static Maps = {};
@@ -51,6 +96,8 @@ class BikeMath
     {
         let slope = elevation / distance;
         let key = slope.toFixed(1);
+
+        if (slope < 0) slope = 0;
 
         if (!BikeMath.Maps[key])
         {
@@ -122,16 +169,16 @@ class Track
 
     constructor(gpx_content)
     {
-        function parseTrkpt(p)
+        function parseTrkpt(node)
         {
-            let lat = parseFloat(p.getAttribute('lat'));
-            let lon = parseFloat(p.getAttribute('lon'));
-            let ele = parseFloat(p.getElementsByTagName('ele')[0].textContent);
-            return { lat, lon, ele };
+            let lat = parseFloat(node.getAttribute('lat'));
+            let lon = parseFloat(node.getAttribute('lon'));
+            let ele = parseFloat(node.getElementsByTagName('ele')[0].textContent);
+            return { lat, lon, ele, node };
         }
 
-        let gpx = new DOMParser().parseFromString(gpx_content, "text/xml");
-        this.points = [...gpx.getElementsByTagName("trkpt")].map(parseTrkpt);
+        this.gpx = new DOMParser().parseFromString(gpx_content, "text/xml");
+        this.points = [...this.gpx.getElementsByTagName("trkpt")].map(parseTrkpt);
         this.lon_min = Math.min.apply(Math, this.points.map(p => p.lon));
         this.lon_max = Math.max.apply(Math, this.points.map(p => p.lon));
         this.lat_min = Math.min.apply(Math, this.points.map(p => p.lat));
@@ -164,10 +211,12 @@ class Track
         return points;
     }
 
-    calculateTime(power, settings)
+    calculateTime(power, settings, update_gpx = false)
     {
-        let points = this.getPoints(40);
+        //let points = this.getPoints(40);
+        let points = this.points;
         let total_time = 0;
+        let start_time = new Date(points[0].node.getElementsByTagName('time')[0].textContent);
 
         for (let i = 1; i < points.length; i++)
         {
@@ -175,9 +224,24 @@ class Track
             let p2 = points[i];
             let distance = p2.total_distance - p1.total_distance;
             let elevation = p2.ele - p1.ele;
-            total_time += BikeMath.time(distance, elevation, power, settings);
+
+            if (distance > 0)
+            {
+                //if (isNaN(BikeMath.time(distance, elevation, power, settings))) debugger;
+                total_time += BikeMath.time(distance, elevation, power, settings);
+            }
+
+            if (update_gpx)
+            {
+                p2.node.getElementsByTagName('time')[0].textContent = new Date(start_time.getTime() + total_time * 1000).toISOString();
+            }
         }
 
+        if (update_gpx)
+        {
+            window.gpx = this.gpx;
+        }
+        
         return total_time;
     }
 }
@@ -292,6 +356,7 @@ async function main()
 {
     let map = new Map(await Track.load());
     map.draw();
+    map.track.calculateTime(200, getSettings(), true);
     
     function onPowerChanged(e)
     {
@@ -448,6 +513,9 @@ async function onLoad()
         /
     }
 }
+https://www.gribble.org/cycling/power_v_speed.html
+https://www.omnicalculator.com/sports/cycling-wattage
 */
-</script>
+</script1>
+-->
 </html>
