@@ -19,7 +19,6 @@ export class ProfileControl
         // @ts-ignore
         this.buffer_canvas = new OffscreenCanvas(this.canvas.width, this.canvas.height);
         this.buffer_context = this.buffer_canvas.getContext('2d');
-        this.canvas.addEventListener('mousemove', e => this._handleMouseMove(e));
         this.canvas_to_distance_projection = new Projection(this.bounds, { min: { x: 0, y: 1 }, max: { x: this.gpx.total_distance, y: 1 } });
         this.path = gpx.sampleToProfile(1, this.canvas.width, this.canvas.height);
         this._draw(this.buffer_context);
@@ -29,6 +28,39 @@ export class ProfileControl
     get bounds()
     {
         return { min: { x: 0, y: 0 }, max: { x: this.canvas.width, y: this.canvas.height } };
+    }
+
+    set selection(value)
+    {
+        if (this._selection)
+        {
+            let context = this.context;
+            let s_x = this._selection.previous.x;
+            let s_w = this._selection.current.x - this._selection.previous.x;
+            let s_h = context.canvas.height;
+            context.clearRect(s_x, 0, s_w, s_h);
+            context.drawImage(this.buffer_canvas, s_x, 0, s_w, s_h, s_x, 0, s_w, s_h);
+        }
+
+        if (value)
+        {
+            let context = this.context;
+            let s_x = value.previous.x;
+            let s_w = value.current.x - value.previous.x;
+            let s_h = context.canvas.height;
+            context.fillStyle = '#ddeeff';
+            context.beginPath();
+            context.moveTo(Math.round(value.previous.x), 0);
+            context.lineTo(Math.round(value.current.x), 0);
+            context.lineTo(Math.round(value.current.x), context.canvas.height);
+            context.lineTo(Math.round(value.previous.x), context.canvas.height);
+            context.closePath();
+            context.fill();
+            context.drawImage(this.buffer_canvas, s_x, 0, s_w, s_h, s_x, 0, s_w, s_h);
+
+        }
+
+        this._selection = value;
     }
 
     distanceAtOffset(x)
@@ -71,58 +103,5 @@ export class ProfileControl
             context.fill();
             previous = current;
         }
-    }
-
-    /**
-     * @param {MouseEvent} e 
-     */
-     _handleMouseMove(e)
-    {
-        let offsetX = e.offsetX;
-        let distance = this.distanceAtOffset(offsetX);
-        
-        if (this.selection)
-        {
-            let context = this.context;
-            let s_x = this.selection.previous.x;
-            let s_w = this.selection.current.x - this.selection.previous.x;
-            let s_h = context.canvas.height;
-            context.clearRect(s_x, 0, s_w, s_h);
-            context.drawImage(this.buffer_canvas, s_x, 0, s_w, s_h, s_x, 0, s_w, s_h);
-        }
-
-        this.selection = this.pointsAtOffset(offsetX);
-
-        window['profile_coursor_distance'].innerText = this._formatDistance(distance);
-        window['profile_coursor_gradient'].innerText = `${(this.selection.current.point.gradient * 100).toFixed(1)}%`;
-        window['profile_coursor_length'].innerText = this._formatDistance(this.selection.current.point.distance_to_previous_point);
-        //window['profile_coursor_start_elevation'].innerText = this._formatDistance(points.previous.point.ele);
-        //window['profile_coursor_end_elevation'].innerText = this._formatDistance(points.current.point.ele);
-        //window['profile_coursor_elevation_difference'].innerText = this._formatDistance(points.current.point.ele - points.previous.point.ele);
-
-        let context = this.context;
-        let s_x = this.selection.previous.x;
-        let s_w = this.selection.current.x - this.selection.previous.x;
-        let s_h = context.canvas.height;
-
-        //context.clearRect(this.selection.previous.x, 0, this.selection.current.x - this.selection.previous.x, context.canvas.height);
-        context.fillStyle = '#ddeeff'; //this.gpx.gradientColor(points.current.point.gradient);
-        context.beginPath();
-        context.moveTo(Math.round(this.selection.previous.x), 0);
-        context.lineTo(Math.round(this.selection.current.x), 0);
-        context.lineTo(Math.round(this.selection.current.x), context.canvas.height);
-        context.lineTo(Math.round(this.selection.previous.x), context.canvas.height);
-        context.closePath();
-        context.fill();
-        context.drawImage(this.buffer_canvas, s_x, 0, s_w, s_h, s_x, 0, s_w, s_h);
-    }
-
-    _formatDistance(distance)
-    {
-        let distance_km = Math.floor(distance / 1000);
-        let distance_m = Math.floor(distance) % 1000;
-        let distance_km_text = distance_km > 0 ? `${distance_km} km` : '';
-        let distance_m_text = `${distance_m} m`;
-        return [distance_km_text, distance_m_text].join(' ');
     }
 }
