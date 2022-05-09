@@ -27,19 +27,34 @@ export class MapControl
             let current = this.path[i];
             let is_previous_selected = previous.point.total_distance > this.selection.from && previous.point.total_distance < this.selection.to;
             let is_current_selected = current.point.total_distance > this.selection.from && current.point.total_distance < this.selection.to;
+            
+            //a = 1 - a;
+            //a = 1 - a * a;
+                
+            if (current.point.gradient > 0)
+            {
+                let a = current.point.gradient * this.gpx.gradient_max_d;
+                context.lineWidth = 1 + a * 20;
+            }
+            else
+            {
+                let a = current.point.gradient * this.gpx.gradient_min_d;
+                context.lineWidth = 1 + a * 20;
+            }
 
             if (is_previous_selected && is_current_selected)
             {
                 context.globalAlpha = 1;
-                context.lineWidth = 2 + current.point.gradient * (current.point.gradient > 0 ? 100 : -100);
+                context.shadowBlur = context.lineWidth;
             }
             else
             {
                 context.globalAlpha = 0.2;
-                context.lineWidth = 2 + current.point.gradient * (current.point.gradient > 0 ? 100 : -100);
+                context.shadowBlur = 0;
             }
 
             context.strokeStyle = this.gpx.gradientColor(current.point.gradient);
+            context.shadowColor = context.strokeStyle;
             context.beginPath();
             context.moveTo(previous.x, previous.y);
             context.lineTo(current.x, current.y);
