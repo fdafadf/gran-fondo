@@ -152,14 +152,14 @@ export class Gpx
             let a = gradient * this.gradient_max_d;
             a = 1 - a;
             a = 1 - a * a;
-            return `rgb(${Math.round(255 * a)}, 0, 0)`;
+            return `rgb(${Math.round(255 * a)}, 0, 128)`;
         }
         else
         {
             let a = gradient * this.gradient_min_d;
             a = 1 - a;
             a = 1 - a * a;
-            return `rgb(0, ${255 * a}, 0)`;
+            return `rgb(0, ${255 * a}, 128)`;
         }
     }
 

@@ -30,11 +30,13 @@ export class MapControl
 
             if (is_previous_selected && is_current_selected)
             {
-                context.lineWidth = 5 + current.point.gradient * (current.point.gradient > 0 ? 200 : -200);
+                context.globalAlpha = 1;
+                context.lineWidth = 2 + current.point.gradient * (current.point.gradient > 0 ? 100 : -100);
             }
             else
             {
-                context.lineWidth = 2;
+                context.globalAlpha = 0.2;
+                context.lineWidth = 2 + current.point.gradient * (current.point.gradient > 0 ? 100 : -100);
             }
 
             context.strokeStyle = this.gpx.gradientColor(current.point.gradient);
