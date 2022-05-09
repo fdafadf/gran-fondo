@@ -39,6 +39,6 @@ export class SpeedCalculator
     calculate(slope, power)
     {
         if (slope < -10) return 11;
-        return this.dict.get(Math.round(slope * 10)).get(Math.round(power / 10)).speed;
+        return Math.min(this.dict.get(Math.round(slope * 10)).get(Math.round(power / 10)).speed, 11);
     }
 }

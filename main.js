@@ -1,37 +1,14 @@
 // @ts-check
 
+import { formatDistance, formatTime } from "./js/Formatting.js";
 import { Gpx } from "./js/Gpx.js";
 import { MapControl } from "./js/MapControl.js";
-import { PowerCalculator } from "./js/PowerCalculator.js";
 import { ProfileControl } from "./js/ProfileControl.js";
 import { kmph_to_mps, mps_to_kmph, SpeedCalculator } from "./js/SpeedCalculator.js";
 
-function formatDistance(distance)
-{
-    let distance_km = Math.floor(distance / 1000);
-    let distance_m = Math.floor(distance) % 1000;
-    let distance_km_text = distance_km > 0 ? `${distance_km} km` : '';
-    let distance_m_text = `${distance_m} m`;
-    return [distance_km_text, distance_m_text].join(' ');
-}
-
-function formatTime(time)
-{
-    let minutes = Math.round(time / 60);
-    return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
-};
-
-//let power = BikeMath.power(0, 100, BikeMath.ROLLING_RESISTANCES.Asphalt.Slick, BikeMath.DRAG_COEFFICIENT.Tops, 1.22601, kmph_to_mps(30), 0, 0.05);
-let total_weight = 100;
-let rolling_resistance = PowerCalculator.ROLLING_RESISTANCES.Asphalt.Slick;
-let drag_coefficient = PowerCalculator.DRAG_COEFFICIENT.Tops;
-let air_density = 1.22601;
-let wind_speed = 0;
-let loss = 0.05;
-
 async function onDOMContentLoaded()
 {
-    let powers_to_estimate = [...Array(15).keys()].map(i => 150 + i * 10);
+    let powers_to_estimate = [...Array(10).keys()].map(i => 170 + i * 10);
     let profile_container = document.querySelector('#profile_container');
     let map_container = document.querySelector('#map_container');
     let time_estimation_container = document.querySelector('#time_estimation_container');
@@ -107,6 +84,7 @@ async function onDOMContentLoaded()
         // //window['profile_coursor_start_elevation'].innerText = this._formatDistance(points.previous.point.ele);
         // //window['profile_coursor_end_elevation'].innerText = this._formatDistance(points.current.point.ele);
         // //window['profile_coursor_elevation_difference'].innerText = this._formatDistance(points.current.point.ele - points.previous.point.ele);
+        document.title = `${selection.index}`;
 
         profile.selection = selection;
     }
