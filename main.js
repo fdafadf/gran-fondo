@@ -84,7 +84,7 @@ async function onDOMContentLoaded()
         // //window['profile_coursor_start_elevation'].innerText = this._formatDistance(points.previous.point.ele);
         // //window['profile_coursor_end_elevation'].innerText = this._formatDistance(points.current.point.ele);
         // //window['profile_coursor_elevation_difference'].innerText = this._formatDistance(points.current.point.ele - points.previous.point.ele);
-        document.title = `${selection.index}`;
+        // document.title = `${selection.index}`;
 
         profile.selection = selection;
     }
