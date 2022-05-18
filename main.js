@@ -47,20 +47,31 @@ async function onDOMContentLoaded()
     // profile_resolution_input.addEventListener('change', onProfileResolutionChanged);
     profile_container.appendChild(profile.canvas);
     let map = new MapControl(gpx, map_container.clientWidth, map_container.clientHeight);
-    map.draw();
+    
     map_container.appendChild(map.canvas);
 
     function handleProfileContainerScroll()
     {
-        map.selection.from = profile.canvas_to_distance_projection.transform({ x: profile_container.scrollLeft, y: 1 }).x;
-        map.selection.to = map.selection.from + profile.canvas_to_distance_projection.transform({ x: profile_container.clientWidth, y: 1 }).x;
-        map.draw();
+        map._selection.from = profile.canvas_to_distance_projection.transform({ x: profile_container.scrollLeft, y: 1 }).x;
+        map._selection.to = map._selection.from + profile.canvas_to_distance_projection.transform({ x: profile_container.clientWidth, y: 1 }).x;
+        map.selection = map._selection;
     }
 
     function handleWindowResize()
     {
         map.resize(map_container.clientWidth, map_container.clientHeight);
-        map.draw();
+        // var map2 = new ol.Map({
+        //     target: 'map2',
+        //     layers: [
+        //       new ol.layer.Tile({
+        //         source: new ol.source.OSM()
+        //       })
+        //     ],
+        //     view: new ol.View({
+        //       center: ol.proj.fromLonLat([37.41, 8.82]),
+        //       zoom: 4
+        //     })
+        //   });
     }
 
     profile_container.addEventListener('scroll', handleProfileContainerScroll);

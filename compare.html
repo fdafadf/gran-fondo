@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.7.5/proj4-src.js" integrity="sha512-v9fKB/Tdskpid8kkFcCde7j8nyykKK9fBAZIU8pzTuMIOMJYccsutTxn8qUS/p/32FG/ynVrsbj+dsaya/jNEg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script type="module" src="compare.js"></script>
+    <title>Document</title>
+</head>
+<body>
+    <div style="height: calc(100vh - 200px - 1em); display: flex; margin-right: 1em;">
+        <div style="display: flex; flex-grow: 1">
+            <div id="map_container" class="panel" style="overflow: hidden; flex-grow: 1; background-color: #fffff5;"></div>
+            <div class="panel">
+                <table style="min-width: 25em;">
+                    <tr><td>Distance</td><td id="info_distance">0:00:00</td></tr>
+                    <tr><td>Time Difference (Total)</td><td id="info_time_difference_total">0:00:00</td></tr>
+                    <tr><td>Time Difference (Segment)</td><td id="info_time_difference_segment">0:00:00</td></tr>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div style="height: 200px; display: flex; margin-right: 1em; margin-bottom: 1em;">
+        <div id="time_comparison_container" class="panel" style="display: flex; flex-grow: 1; overflow-x: hidden; background-color: #fffff5;"></div>
+    </div>
+</body>
+<style>
+body {
+    margin: 0;
+    padding: 0;
+}
+.panel {
+    box-shadow: 0 0 5px #777;
+    margin-top: 1em;
+    margin-left: 1em;
+}
+td:nth-child(2) {
+    text-align: right;
+}
+</style>
+</html>

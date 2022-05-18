@@ -13,7 +13,7 @@ export class ProfileControl
     {
         this.gpx = gpx;
         this.canvas = document.createElement('canvas');
-        this.canvas.width = gpx.points.length * 10;
+        this.canvas.width = gpx.points.length * 8;
         this.canvas.height = 200;
         /** @type {CanvasRenderingContext2D} */
         this.context = this.canvas.getContext('2d');

@@ -12,3 +12,13 @@ export function formatTime(time)
     let minutes = Math.round(time / 60);
     return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
 };
+
+export function formatTimeMS(time)
+{
+    let total_seconds = Math.abs(Math.round(time / 1000));
+    let seconds = total_seconds % 60;
+    let minutes = Math.floor(total_seconds / 60);
+    let result = `${minutes}m ${seconds}s`;
+    if (time < 0) result = "- " + result;
+    return result;
+};

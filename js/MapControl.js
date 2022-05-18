@@ -12,21 +12,53 @@ export class MapControl
     {
         this.gpx = gpx;
         this.canvas = document.createElement('canvas');
-        this.selection = { from: 0, to: 10000 };
+        // @ts-ignore
+        this.buffer_canvas = new OffscreenCanvas(width, height);
+        this.buffer_context = this.buffer_canvas.getContext('2d');
+        this._selection = { from: 0, to: gpx.total_distance };
+        /** @type {import("./Gpx.js").SplitItem} */
+        this._selected_point = null;
         this.resize(width, height);
+        this._draw(this.buffer_context);
+        this.context.drawImage(this.buffer_canvas, 0, 0);
     }
 
-    draw()
+    set selection(value)
     {
-        let context = this.context;
-        context.clearRect(0, 0, this.context.canvas.width, this.context.canvas.height);
+        this._selection = value;
+        this._draw(this.buffer_context);
+        this.context.clearRect(0, 0, this.context.canvas.width, this.context.canvas.height);
+        this.context.drawImage(this.buffer_canvas, 0, 0);
+    }
+
+    set selected_point(value)
+    {
+        this._selected_point = value;
+        this.context.clearRect(0, 0, this.context.canvas.width, this.context.canvas.height);
+        this.context.drawImage(this.buffer_canvas, 0, 0);
+
+        if (this._selected_point)
+        {
+            let projection = new Projection(this.gpx.lon_lat_bounds, this.bounds);
+            let sample = this.gpx._sample(this._selected_point.end.point, projection, this.bounds);
+            
+            this.context.strokeStyle = 'red';
+            this.context.beginPath();
+            this.context.arc(sample.x, sample.y, 10, 0, 2 * Math.PI);
+            this.context.stroke();
+        }
+    }
+
+    _draw(context)
+    {
+        context.clearRect(0, 0, context.canvas.width, context.canvas.height);
         let previous = this.path[0];
 
         for (let i = 1; i < this.path.length; i++)
         {
             let current = this.path[i];
-            let is_previous_selected = previous.point.total_distance > this.selection.from && previous.point.total_distance < this.selection.to;
-            let is_current_selected = current.point.total_distance > this.selection.from && current.point.total_distance < this.selection.to;
+            let is_previous_selected = previous.point.total_distance > this._selection.from && previous.point.total_distance < this._selection.to;
+            let is_current_selected = current.point.total_distance > this._selection.from && current.point.total_distance < this._selection.to;
             
             //a = 1 - a;
             //a = 1 - a * a;
@@ -78,4 +110,5 @@ export class MapControl
     {
         return { min: { x: 20, y: 20 }, max: { x: this.canvas.width - 40, y: this.canvas.height - 40 } };
     }
+    
 }
